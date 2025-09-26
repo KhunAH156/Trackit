@@ -6,26 +6,47 @@ function App() {
   const [category, setCategory] = useState("");
   const [type, setType] = useState("expense");
 
-  const handleAddTransaction = (e) => {
-  e.preventDefault();
-  const amt = parseFloat(amount);
-  if (amt <= 0) {
-    alert("Amount must be greater than 0");
-    return;
-  }
+  const handleAddTransaction = async (e) => {
+    e.preventDefault();
+    const amt = parseFloat(amount);
+    if (amt <= 0) {
+      alert("Amount must be greater than 0");
+      return;
+    }
 
-  const newTransaction = {
-    id: Date.now(),
-    amount: amt,
-    category,
-    type,
-    timestamp: new Date().toISOString(),
+    const newTransaction = {
+      userId: "test-user-123", // temporary; later use Cognito
+      amount: amt,
+      category,
+      type,
+    };
+
+    try {
+      const res = await fetch(
+        "API_GATEWAY_INVOKE_URL_HERE/transactions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newTransaction),
+        }
+      );
+
+      if (!res.ok) {
+        // backend returned error (e.g. 500)
+        const errorMsg = await res.text();
+        throw new Error(errorMsg || "Network response was not ok");
+      }
+
+      const data = await res.json();
+      // Lambda now returns the full transaction object
+      setTransactions([data, ...transactions]);
+      setAmount("");
+      setCategory("");
+    } catch (err) {
+      console.error("❌ Error adding transaction:", err);
+      alert("Failed to save transaction: " + err.message);
+    }
   };
-
-  setTransactions([newTransaction, ...transactions]);
-  setAmount("");
-  setCategory("");
-};
 
   return (
     <div style={{ padding: "20px", fontFamily: "Arial" }}>
@@ -50,7 +71,11 @@ function App() {
           required
           style={{ marginRight: "10px" }}
         />
-        <select value={type} onChange={(e) => setType(e.target.value)} style={{ marginRight: "10px" }}>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          style={{ marginRight: "10px" }}
+        >
           <option value="expense">Expense</option>
           <option value="income">Income</option>
         </select>
@@ -61,7 +86,8 @@ function App() {
       <ul>
         {transactions.map((t) => (
           <li key={t.id}>
-            {t.type.toUpperCase()}: ${t.amount} - {t.category} ({new Date(t.timestamp).toLocaleString()})
+            {t.type.toUpperCase()}: ${t.amount} - {t.category} (
+            {new Date(t.timestamp).toLocaleString()})
           </li>
         ))}
       </ul>
