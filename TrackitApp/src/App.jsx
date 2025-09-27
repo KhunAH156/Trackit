@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 function App() {
   const [transactions, setTransactions] = useState([]);
@@ -23,7 +24,7 @@ function App() {
 
     try {
       const res = await fetch(
-        "API_GATEWAY_INVOKE_URL_HERE/transactions",
+        "API-URL/transactions",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -81,7 +82,7 @@ function App() {
         </select>
         <button type="submit">Add</button>
       </form>
-
+      <Link to="/dashboard">Go to Dashboard</Link>
       <h2>Transactions</h2>
       <ul>
         {transactions.map((t) => (
