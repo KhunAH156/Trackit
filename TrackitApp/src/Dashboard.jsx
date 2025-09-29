@@ -58,7 +58,7 @@ function Dashboard() {
     const fetchData = async () => {
       try {
         const res = await fetch(
-          "API_URL/transactions?userId=test-user-123"
+          "https://zmql9x21lc.execute-api.us-east-1.amazonaws.com/dev/transactions?userId=test-user-123"
         );
         const data = await res.json();
         setTransactions(data);
