@@ -7,20 +7,21 @@ import "./index.css";
 import App from "./App.jsx";
 import Dashboard from "./Dashboard.jsx";
 import TransactionsInsertPage from "./TransactionsInsertPage.jsx";
+import ProtectedRoute from "./ProtectedRoute.jsx";
+import { SessionManager } from "./components/SessionManager.jsx";
 
-// Configure Amplify
 Amplify.configure({
   Auth: {
     Cognito: {
-      region: "us-east-1",
-      userPoolId: "us-east-1_2yBuCQD59",
-      userPoolClientId: "1ral22edgd2jnc9lm3dh6l9l51",
+      region: import.meta.env.VITE_AWS_REGION,
+      userPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID,
+      userPoolClientId: import.meta.env.VITE_COGNITO_APP_CLIENT_ID,
       loginWith: {
         oauth: {
-          domain: "us-east-12ybucqd59.auth.us-east-1.amazoncognito.com",
+          domain: import.meta.env.VITE_COGNITO_DOMAIN,
           scopes: ["email", "openid", "profile"],
-          redirectSignIn: ["http://localhost:5173/dashboard"],
-          redirectSignOut: ["http://localhost:5173/"],
+          redirectSignIn: [import.meta.env.VITE_REDIRECT_SIGN_IN],
+          redirectSignOut: [import.meta.env.VITE_REDIRECT_SIGN_OUT],
           responseType: "code",
         },
       },
@@ -33,8 +34,26 @@ createRoot(document.getElementById("root")).render(
     <Router>
       <Routes>
         <Route path="/" element={<App />} />
-        <Route path="/transactions" element={<TransactionsInsertPage />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route 
+          path="/transactions" 
+          element={
+            <ProtectedRoute>
+              <SessionManager>
+                <TransactionsInsertPage />
+              </SessionManager>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <SessionManager>
+                <Dashboard />
+              </SessionManager>
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </Router>
   </StrictMode>

@@ -1,11 +1,39 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { signOut, fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
 
 function TransactionsInsertPage() {
+  const navigate = useNavigate();
   const [transactions, setTransactions] = useState([]);
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
   const [type, setType] = useState("expense");
+  const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    initializeUser();
+  }, []);
+
+  async function initializeUser() {
+    try {
+      const user = await getCurrentUser();
+      setUserId(user.userId);
+      setUserEmail(user.signInDetails?.loginId || user.username);
+    } catch (error) {
+      console.error("Error getting user:", error);
+      navigate("/");
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await signOut();
+      navigate("/");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  }
 
   const handleAddTransaction = async (e) => {
     e.preventDefault();
@@ -16,30 +44,34 @@ function TransactionsInsertPage() {
     }
 
     const newTransaction = {
-      userId: "test-user-123", // temporary; later use Cognito
+      userId: userId,
       amount: amt,
       category,
       type,
     };
 
     try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+
       const res = await fetch(
-        "https://zmql9x21lc.execute-api.us-east-1.amazonaws.com/dev/transactions",
+        `${import.meta.env.VITE_AWS_APIGATEWAY_URL}/transactions`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            Authorization: idToken,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(newTransaction),
         }
       );
 
       if (!res.ok) {
-        // backend returned error (e.g. 500)
         const errorMsg = await res.text();
         throw new Error(errorMsg || "Network response was not ok");
       }
 
       const data = await res.json();
-      // Lambda now returns the full transaction object
       setTransactions([data, ...transactions]);
       setAmount("");
       setCategory("");
@@ -51,7 +83,15 @@ function TransactionsInsertPage() {
 
   return (
     <div style={{ padding: "20px", fontFamily: "Arial" }}>
-      <h1>TrackIt - Add Transaction</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1>TrackIt - Add Transaction</h1>
+        <div>
+          <span style={{ marginRight: "15px" }}>Welcome, {userEmail}</span>
+          <button onClick={handleLogout} style={{ padding: "8px 16px" }}>
+            Logout
+          </button>
+        </div>
+      </div>
 
       <form onSubmit={handleAddTransaction} style={{ marginBottom: "20px" }}>
         <input
@@ -83,7 +123,7 @@ function TransactionsInsertPage() {
         <button type="submit">Add</button>
       </form>
       <Link to="/dashboard">Go to Dashboard</Link>
-      <h2>Transactions</h2>
+      <h2>Recent Transactions</h2>
       <ul>
         {transactions.map((t) => (
           <li key={t.id}>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { signOut, fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
 import {
   PieChart, Pie, Cell, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid
@@ -32,7 +33,6 @@ function groupTransactions(transactions, mode = "monthly") {
   return Object.values(grouped).sort((a, b) => (a.period > b.period ? 1 : -1));
 }
 
-// Helper to get month:year strings from transactions
 function getMonthYearOptions(transactions) {
   const months = new Set();
   transactions.forEach((t) => {
@@ -49,25 +49,69 @@ function getMonthYearOptions(transactions) {
 }
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [transactions, setTransactions] = useState([]);
   const [timeView, setTimeView] = useState("monthly");
   const [sortConfig, setSortConfig] = useState({ key: "timestamp", direction: "desc" });
   const [filterMonth, setFilterMonth] = useState("all");
+  const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch(
-          "https://zmql9x21lc.execute-api.us-east-1.amazonaws.com/dev/transactions?userId=test-user-123"
-        );
-        const data = await res.json();
-        setTransactions(data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchData();
+    initializeUser();
   }, []);
+
+  useEffect(() => {
+    if (userId) {
+      fetchData();
+    }
+  }, [userId]);
+
+  async function initializeUser() {
+    try {
+      const user = await getCurrentUser();
+      setUserId(user.userId);
+      setUserEmail(user.signInDetails?.loginId || user.username);
+    } catch (error) {
+      console.error("Error getting user:", error);
+      navigate("/");
+    }
+  }
+
+  async function fetchData() {
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+
+      const res = await fetch(
+        `${import.meta.env.VITE_AWS_APIGATEWAY_URL}/transactions?userId=${userId}`,
+        {
+          headers: {
+            Authorization: idToken,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch transactions");
+      }
+
+      const data = await res.json();
+      setTransactions(data);
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await signOut();
+      navigate("/");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  }
 
   // --- Filter Transactions by month:year ---
   const filteredTransactions = transactions.filter((tx) => {
@@ -111,8 +155,16 @@ function Dashboard() {
 
   return (
     <div style={{ padding: "20px" }}>
-      <h1>Dashboard</h1>
-      <Link to="/">Back to Add Transaction</Link>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1>Dashboard</h1>
+        <div>
+          <span style={{ marginRight: "15px" }}>Welcome, {userEmail}</span>
+          <button onClick={handleLogout} style={{ padding: "8px 16px" }}>
+            Logout
+          </button>
+        </div>
+      </div>
+      <Link to="/transactions">Add Transaction</Link>
 
       {/* Donut Chart */}
       <h2>Spending by Category</h2>
@@ -171,10 +223,18 @@ function Dashboard() {
       <table border="1" cellPadding="8">
         <thead>
           <tr>
-            <th onClick={() => requestSort("timestamp")}>Date</th>
-            <th onClick={() => requestSort("category")}>Category</th>
-            <th onClick={() => requestSort("type")}>Type</th>
-            <th onClick={() => requestSort("amount")}>Amount</th>
+            <th onClick={() => requestSort("timestamp")} style={{ cursor: "pointer" }}>
+              Date {sortConfig.key === "timestamp" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th onClick={() => requestSort("category")} style={{ cursor: "pointer" }}>
+              Category {sortConfig.key === "category" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th onClick={() => requestSort("type")} style={{ cursor: "pointer" }}>
+              Type {sortConfig.key === "type" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
+            <th onClick={() => requestSort("amount")} style={{ cursor: "pointer" }}>
+              Amount {sortConfig.key === "amount" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -183,7 +243,7 @@ function Dashboard() {
               <td>{new Date(tx.timestamp).toLocaleDateString()}</td>
               <td>{tx.category}</td>
               <td>{tx.type}</td>
-              <td>{tx.amount}</td>
+              <td>${tx.amount.toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
